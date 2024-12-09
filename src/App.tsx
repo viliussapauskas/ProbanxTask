@@ -9,44 +9,20 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
+  InputAdornment,
 } from "@mui/material";
 import * as yup from "yup";
 import "./App.css";
-import { useRef } from "react";
 import { payerAccounts } from "../constants";
+import EuroIcon from "@mui/icons-material/Euro";
 
 const App = () => {
-  // const isPayeeAccountValid = async (accountNumber: string) => {
-  //   try {
-  //     ref.current++;
-  //     console.log(`Request count: ${ref.current}`);
-  //     const response = await fetch(
-  //       // "https://matavi.eu/validate/?iban=LT307300010172619164"
-  //       `https://matavi.eu/validate/?iban=${accountNumber}`
-  //     );
-  //     if (!response.ok) {
-  //       throw new Error(`HTTP error! Status: ${response.status}`);
-  //     }
-  //     const data = await response.json();
-  //     console.log("Response data:", data.valid);
-  //     return data.valid;
-  //   } catch (error) {
-  //     console.error("Fetch error:", error?.message);
-  //   }
-  // };
-
-  // let requestCount = 0;
-  const ref = useRef(0);
-
   const isPayeeAccountValid = async (
     accountNumber: string
   ): Promise<boolean> => {
     let timeoutId: number;
 
     const debouncedValidation = async () => {
-      ref.current++;
-      console.log(`Request count: ${ref.current}`);
-
       try {
         const response = await fetch(
           `https://matavi.eu/validate/?iban=${accountNumber}`
@@ -75,25 +51,11 @@ const App = () => {
     });
   };
 
+  const getCurrentBalance = () => {
+    return payerAccounts?.find((x) => x.id === values.payerAccount)?.balance;
+  };
+
   const validationSchema = yup.object().shape({
-    amount: yup.number().required("Amount is required").max(
-      // currentBalance,
-      100,
-      `Amount cannot exceed your current balance of ${3}`
-    ),
-    payeeAccount: yup
-      .string()
-      .required("Payee Account is required")
-      .test("is-valid-payee", "Payee Account is invalid", async (value) => {
-        if (!value) return false;
-        try {
-          const isValid = await isPayeeAccountValid(value);
-          return isValid;
-        } catch (error) {
-          console.error("Error validating payee account:", error);
-          return false;
-        }
-      }),
     purpose: yup
       .string()
       .required("Purpose is required")
@@ -103,14 +65,44 @@ const App = () => {
     payee: yup.string().required("Payee is required").max(70),
   });
 
+  const validatePayeeAccount = (value: string) => {
+    // Your custom validation logic here
+    if (!value || value.length < 10) {
+      return "Payee Account must be at least 10 characters long";
+    }
+    return null; // Validation passed
+  };
+
+  const validateAmount = (value: number) => {
+    console.log("validating amount", value);
+
+    // Your custom validation logic, considering payerAccount
+    if (!value || value <= 0) {
+      return "Amount must be a positive number";
+    }
+
+    const currentBalance = getCurrentBalance();
+    if (!currentBalance) {
+      return "Balance not avaialble";
+    }
+
+    if (value > currentBalance) {
+      return "Insuficient funds";
+    }
+    // Additional validation based on payerAccount, if needed
+    return null; // Validation passed
+  };
+
   const {
     values,
     errors,
     handleSubmit,
     isSubmitting,
-    handleChange,
+    // handleChange,
     handleBlur,
     touched,
+    setFieldValue,
+    setFieldError,
   } = useFormik({
     initialValues: {
       amount: "",
@@ -119,11 +111,41 @@ const App = () => {
       payerAccount: payerAccounts[0]?.id,
       payee: "",
     },
+    validateOnChange: false,
+    validateOnBlur: false,
     validationSchema,
     onSubmit: (values) => {
       console.log("Submitting these values", values);
     },
   });
+
+  const validateField = (fieldValue: string) => {
+    try {
+      schema.validateSync(fieldValue, { abortEarly: false });
+      return null; // Validation passed
+    } catch (error) {
+      return error.errors; // Return an array of validation errors
+    }
+  };
+
+  const handleChange = (event: unknown) => {
+    const { name, value } = event.target;
+
+    let errors;
+
+    if (name === "payeeAccount") {
+      errors = validatePayeeAccount(value);
+    } else if (name === "amount") {
+      errors = validateAmount(value);
+    } else {
+      // Use Yup validation for other fields
+      errors = validateField(value, validationSchema.shape()[name]);
+    }
+
+    // Update the form values and errors
+    setFieldValue(name, value);
+    setFieldError(name, errors);
+  };
 
   return (
     <Box
@@ -150,7 +172,7 @@ const App = () => {
                 onChange={handleChange}
                 onBlur={handleBlur}
                 error={touched.payerAccount && !!errors.payerAccount}
-                // Maybe add helper text
+                //  Add helper text
               >
                 {payerAccounts.map((account) => (
                   <MenuItem
@@ -199,9 +221,31 @@ const App = () => {
               onChange={handleChange}
               onBlur={handleBlur}
               error={touched.amount && !!errors.amount}
-              helperText={touched.amount && errors.amount}
+              helperText={
+                <span
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <span>{errors?.amount}</span>
+                  <span style={{ color: "grey" }}>
+                    Your balance is{" "}
+                    {
+                      payerAccounts?.find((x) => x.id === values.payerAccount)
+                        ?.balance
+                    }
+                  </span>
+                </span>
+              }
+              slotProps={{
+                input: {
+                  // endAdornment÷
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {/* <EuroIcon /> */}€
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
-
             <TextField
               fullWidth
               label="Purpose"
