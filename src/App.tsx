@@ -1,3 +1,4 @@
+import React, { useCallback, useEffect } from "react";
 import { useFormik } from "formik";
 import {
   Select,
@@ -14,96 +15,69 @@ import {
 import * as yup from "yup";
 import "./App.css";
 import { payerAccounts } from "../constants";
-import EuroIcon from "@mui/icons-material/Euro";
+
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
 
 const App = () => {
-  const isPayeeAccountValid = async (
-    accountNumber: string
-  ): Promise<boolean> => {
-    let timeoutId: number;
-
-    const debouncedValidation = async () => {
-      try {
-        const response = await fetch(
-          `https://matavi.eu/validate/?iban=${accountNumber}`
-        );
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log("Response data:", data.valid);
-        return data.valid;
-      } catch (error) {
-        console.error("Fetch error:", error?.message);
+  const isPayeeAccountValid = async (accountNumber: string) => {
+    try {
+      const response = await fetch(
+        `https://matavi.eu/validate/?iban=${accountNumber}`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    };
-
-    return new Promise((resolve, reject) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        try {
-          const result = await debouncedValidation();
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
+      const { valid } = await response.json();
+      return valid;
+    } catch (error) {
+      console.error("Fetch error:", error?.message);
+      return false;
+    }
   };
 
-  const getCurrentBalance = () => {
-    return payerAccounts?.find((x) => x.id === values.payerAccount)?.balance;
+  const validatePayeeAccount = async (value: string) => {
+    if (!value) {
+      setFieldError("payeeAccount", "Payee account is required");
+      return false;
+    }
+
+    try {
+      const isValid = await isPayeeAccountValid(value);
+      if (!isValid) {
+        setFieldError("payeeAccount", "Payee account is invalid");
+        return false;
+      } else {
+        setFieldError("payeeAccount", "");
+        return true;
+      }
+    } catch (error) {
+      setFieldError("payeeAccount", "Error validating account");
+      console.error("Validation error:", error);
+      return false;
+    }
   };
 
   const validationSchema = yup.object().shape({
     purpose: yup
       .string()
       .required("Purpose is required")
-      .min(3, "Purpose has to have at least 3 characters")
-      .max(137, "Purpose has to have less than 137"),
+      .min(3, "Purpose must have at least 3 characters")
+      .max(137, "Purpose must be less than 137 characters"),
     payerAccount: yup.string().required("Payer Account is required"),
     payee: yup.string().required("Payee is required").max(70),
   });
 
-  const validatePayeeAccount = (value: string) => {
-    // Your custom validation logic here
-    if (!value || value.length < 10) {
-      return "Payee Account must be at least 10 characters long";
-    }
-    return null; // Validation passed
-  };
-
-  const validateAmount = (value: number) => {
-    console.log("validating amount", value);
-
-    // Your custom validation logic, considering payerAccount
-    if (!value || value <= 0) {
-      return "Amount must be a positive number";
-    }
-
-    const currentBalance = getCurrentBalance();
-    if (!currentBalance) {
-      return "Balance not avaialble";
-    }
-
-    if (value > currentBalance) {
-      return "Insuficient funds";
-    }
-    // Additional validation based on payerAccount, if needed
-    return null; // Validation passed
-  };
-
-  const {
-    values,
-    errors,
-    handleSubmit,
-    isSubmitting,
-    // handleChange,
-    handleBlur,
-    touched,
-    setFieldValue,
-    setFieldError,
-  } = useFormik({
+  const formik = useFormik({
     initialValues: {
       amount: "",
       payeeAccount: "",
@@ -111,41 +85,114 @@ const App = () => {
       payerAccount: payerAccounts[0]?.id,
       payee: "",
     },
+    validationSchema,
     validateOnChange: false,
     validateOnBlur: false,
-    validationSchema,
-    onSubmit: (values) => {
-      console.log("Submitting these values", values);
-    },
+    onSubmit: () => {},
   });
 
-  const validateField = (fieldValue: string) => {
-    try {
-      schema.validateSync(fieldValue, { abortEarly: false });
-      return null; // Validation passed
-    } catch (error) {
-      return error.errors; // Return an array of validation errors
-    }
+  const {
+    setFieldValue,
+    setFieldError,
+    handleBlur,
+    values,
+    errors,
+    isSubmitting,
+  } = formik;
+
+  const getCurrentBalance = () => {
+    return payerAccounts?.find((x) => x.id === values.payerAccount)?.balance;
   };
 
-  const handleChange = (event: unknown) => {
-    const { name, value } = event.target;
+  const validateAmount = (value) => {
+    if (!value || value <= 0) {
+      setFieldError("amount", "Amount must be a positive number");
+      return false;
+    }
 
-    let errors;
+    const currentBalance = getCurrentBalance();
+    if (currentBalance === undefined) {
+      setFieldError("amount", "Balance not available");
+      return false;
+    }
+
+    if (value > currentBalance) {
+      console.log("------");
+      console.log("value", value);
+      console.log("currentBalance", currentBalance);
+      console.log("------");
+      setFieldError("amount", "Insufficient funds");
+      return false;
+    }
+
+    setFieldError("amount", "");
+    return true; // Clear error if validation passes
+  };
+
+  const debouncedValidatePayeeAccount = useCallback(
+    debounce(async (value: string) => {
+      if (!value) {
+        setFieldError("payeeAccount", "Payee account is required");
+        return;
+      }
+      const isValid = await isPayeeAccountValid(value);
+      if (!isValid) {
+        setFieldError("payeeAccount", "Payee account is invalid");
+      } else {
+        setFieldError("payeeAccount", "");
+      }
+      return isValid;
+    }, 500),
+    []
+  );
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFieldValue(name, value);
 
     if (name === "payeeAccount") {
-      errors = validatePayeeAccount(value);
+      debouncedValidatePayeeAccount(value);
     } else if (name === "amount") {
-      errors = validateAmount(value);
+      validateAmount(value);
     } else {
-      // Use Yup validation for other fields
-      errors = validateField(value, validationSchema.shape()[name]);
+      try {
+        validationSchema.validateSyncAt(name, { [name]: value });
+        setFieldError(name, "");
+      } catch (error) {
+        setFieldError(name, error.message);
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const isAmountValid = validateAmount(values.amount);
+    const isPayeeAccountValid = await validatePayeeAccount(values.payeeAccount);
+    const isPurposeValid = !errors.purpose;
+    const isPayeeValid = !errors.payee;
+
+    console.log("isAmountValid", isAmountValid);
+    console.log("isPayeeAccountValid", isPayeeAccountValid);
+    console.log("isPurposeValid", isPurposeValid);
+    console.log("isPayeeValid", isPayeeValid);
+
+    if (
+      !isAmountValid ||
+      !isPayeeAccountValid ||
+      !isPurposeValid ||
+      !isPayeeValid
+    ) {
+      return;
     }
 
-    // Update the form values and errors
-    setFieldValue(name, value);
-    setFieldError(name, errors);
+    console.log("Submitting these values", values);
   };
+
+  useEffect(() => {
+    if (values.amount) {
+      validateAmount(values.amount);
+    }
+  }, [values.payerAccount]);
 
   return (
     <Box
@@ -156,11 +203,11 @@ const App = () => {
         height: "100vh",
       }}
     >
-      <Card sx={{ maxWidth: 500 }}>
+      <Card sx={{ maxWidth: 500 }} data-testid="card">
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} data-testid="form">
             <FormControl fullWidth>
-              <InputLabel id="demo-simple-select-label">Account</InputLabel>
+              <InputLabel id="payer-account-label">Account</InputLabel>
               <Select
                 SelectDisplayProps={{
                   style: { display: "flex", justifyContent: "space-between" },
@@ -171,14 +218,15 @@ const App = () => {
                 name="payerAccount"
                 onChange={handleChange}
                 onBlur={handleBlur}
-                error={touched.payerAccount && !!errors.payerAccount}
-                //  Add helper text
+                error={!!errors.payerAccount}
+                data-testid="payer-account-select"
               >
                 {payerAccounts.map((account) => (
                   <MenuItem
                     key={account?.id}
                     value={account.id}
                     style={{ justifyContent: "space-between" }}
+                    data-testid={`payer-account-option-${account.id}`}
                   >
                     <span>{`${account.iban}`}</span>
                     <span>{`${account.balance} EUR`}</span>
@@ -195,8 +243,9 @@ const App = () => {
               value={values.payee}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={touched.payee && !!errors.payee}
-              helperText={touched.payee && errors.payee}
+              error={!!errors.payee}
+              helperText={errors.payee}
+              data-testid="payee-input"
             />
             <TextField
               fullWidth
@@ -207,8 +256,9 @@ const App = () => {
               value={values.payeeAccount}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={touched.payeeAccount && !!errors.payeeAccount}
-              helperText={touched.payeeAccount && errors.payeeAccount}
+              error={!!errors.payeeAccount}
+              helperText={errors.payeeAccount}
+              data-testid="payee-account-input"
             />
             <TextField
               fullWidth
@@ -220,7 +270,7 @@ const App = () => {
               value={values.amount}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={touched.amount && !!errors.amount}
+              error={!!errors.amount}
               helperText={
                 <span
                   style={{ display: "flex", justifyContent: "space-between" }}
@@ -237,14 +287,12 @@ const App = () => {
               }
               slotProps={{
                 input: {
-                  // endAdornment÷
                   endAdornment: (
-                    <InputAdornment position="end">
-                      {/* <EuroIcon /> */}€
-                    </InputAdornment>
+                    <InputAdornment position="end">€</InputAdornment>
                   ),
                 },
               }}
+              data-testid="amount-input"
             />
             <TextField
               fullWidth
@@ -255,11 +303,17 @@ const App = () => {
               value={values.purpose}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={touched.purpose && !!errors.purpose}
-              helperText={touched.purpose && errors.purpose}
+              error={!!errors.purpose}
+              helperText={errors.purpose}
+              data-testid="purpose-input"
             />
             <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-              <Button type="submit" variant="contained" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={isSubmitting}
+                data-testid="submit-button"
+              >
                 Submit
               </Button>
             </Box>
