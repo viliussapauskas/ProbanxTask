@@ -4,7 +4,7 @@ export interface PayerAccount {
   balance: number;
 }
 
-export const payerAccounts: Array<PayerAccount> = [
+export const PAYER_ACCOUNTS: Array<PayerAccount> = [
   {
     iban: "LT307300010172619160",
     id: "1",

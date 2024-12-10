@@ -1,4 +1,4 @@
-export const isPayeeAccountValid = async (accountNumber: string) => {
+export const fetchIsPayeeAccountValid = async (accountNumber: string) => {
   try {
     const response = await fetch(
       `https://matavi.eu/validate/?iban=${accountNumber}`
