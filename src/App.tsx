@@ -1,4 +1,3 @@
-import React, { useCallback, useEffect } from "react";
 import { useFormik } from "formik";
 import {
   Select,
@@ -11,46 +10,20 @@ import {
   InputLabel,
   MenuItem,
   InputAdornment,
+  Typography,
 } from "@mui/material";
 import * as yup from "yup";
 import "./App.css";
 import { payerAccounts } from "../constants";
-
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      func(...args);
-    }, delay);
-  };
-};
+import { useDebouncedCallback } from "use-debounce";
+import { isPayeeAccountValid } from "./api";
 
 const App = () => {
-  const isPayeeAccountValid = async (accountNumber: string) => {
-    try {
-      const response = await fetch(
-        `https://matavi.eu/validate/?iban=${accountNumber}`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      const { valid } = await response.json();
-      return valid;
-    } catch (error) {
-      console.error("Fetch error:", error?.message);
-      return false;
-    }
-  };
-
   const validatePayeeAccount = async (value: string) => {
     if (!value) {
       setFieldError("payeeAccount", "Payee account is required");
       return false;
     }
-
     try {
       const isValid = await isPayeeAccountValid(value);
       if (!isValid) {
@@ -67,6 +40,11 @@ const App = () => {
     }
   };
 
+  const debouncedValidatePayeeAccount = useDebouncedCallback(
+    validatePayeeAccount,
+    300
+  );
+
   const validationSchema = yup.object().shape({
     purpose: yup
       .string()
@@ -75,6 +53,42 @@ const App = () => {
       .max(135, "Purpose must be less than 135 characters"),
     payerAccount: yup.string().required("Payer Account is required"),
     payee: yup.string().required("Payee is required").max(70),
+    amount: yup
+      .number()
+      .required("Amount is required")
+      .min(0.01)
+      .test(
+        "check-amount-validity",
+        "Amount must be less than or equal to the account balance",
+        function (value) {
+          const currentBalance = getCurrentBalance();
+
+          if (!currentBalance) {
+            return this.createError({
+              message: "Payer account must be selected first",
+            });
+          }
+
+          if (value > currentBalance) {
+            return this.createError({
+              message: `Amount cannot exceed the current balance of ${currentBalance}`,
+            });
+          }
+
+          return true;
+        }
+      ),
+    payeeAccount: yup
+      .string()
+      .required("Payee account is required")
+      .test(
+        "is-valid-payee-account",
+        "Payee account is invalid",
+        async (value) => {
+          const isValid = await debouncedValidatePayeeAccount(value);
+          return isValid ?? false;
+        }
+      ),
   });
 
   const formik = useFormik({
@@ -86,122 +100,41 @@ const App = () => {
       payee: "",
     },
     validationSchema,
-    validateOnChange: false,
-    validateOnBlur: false,
-    onSubmit: () => {},
+    onSubmit: (values) => {
+      const payerAccount = payerAccounts.find(
+        (x) => x.id === values.payerAccount
+      )?.iban;
+
+      console.log("SUBMITING THESE", values);
+      console.log("---------Submitting these values------");
+      console.log("Payer account", payerAccount);
+      console.log("Payee", values.payee);
+      console.log("Payee account", values.payeeAccount);
+      console.log("Amount", values.amount);
+      console.log("Purpose", values.purpose);
+      console.log("--------------------------------------");
+      setSubmitting(false);
+    },
   });
 
   const {
-    setFieldValue,
     setFieldError,
     handleBlur,
     values,
     errors,
     isSubmitting,
-    validateField,
+    handleSubmit,
+    handleChange,
+    setSubmitting,
   } = formik;
 
-  const getCurrentBalance = () => {
+  const getCurrentBalance = (): number | undefined => {
     return payerAccounts?.find((x) => x.id === values.payerAccount)?.balance;
   };
 
-  const validateAmount = (value) => {
-    if (!value || value < 0.01) {
-      setFieldError("amount", "Amount can not be less than 0.01");
-      return false;
-    }
-
-    const currentBalance = getCurrentBalance();
-    if (currentBalance === undefined) {
-      setFieldError("amount", "Balance not available");
-      return false;
-    }
-
-    if (value > currentBalance) {
-      console.log("------");
-      console.log("value", value);
-      console.log("currentBalance", currentBalance);
-      console.log("------");
-      setFieldError("amount", "Insufficient funds");
-      return false;
-    }
-
-    setFieldError("amount", "");
-    return true; // Clear error if validation passes
-  };
-
-  const debouncedValidatePayeeAccount = useCallback(
-    debounce(async (value: string) => {
-      if (!value) {
-        setFieldError("payeeAccount", "Payee account is required");
-        return;
-      }
-      const isValid = await isPayeeAccountValid(value);
-      if (!isValid) {
-        setFieldError("payeeAccount", "Payee account is invalid");
-      } else {
-        setFieldError("payeeAccount", "");
-      }
-      return isValid;
-    }, 500),
-    []
-  );
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFieldValue(name, value);
-
-    if (name === "payeeAccount") {
-      debouncedValidatePayeeAccount(value);
-    } else if (name === "amount") {
-      validateAmount(value);
-    } else {
-      try {
-        validationSchema.validateSyncAt(name, { [name]: value });
-        setFieldError(name, "");
-      } catch (error) {
-        setFieldError(name, error.message);
-      }
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const isAmountValid = validateAmount(values.amount);
-    const isPayeeAccountValid = await validatePayeeAccount(values.payeeAccount);
-
-    await validateField("purpose");
-    await validateField("payee");
-
-    // const isPurposeValid = !(await validateField("purpose"));
-    // const isPurposeValid = !errors.purpose && !(await validateField("purpose"));
-    const isPurposeValid = !errors.purpose;
-    // const isPayeeValid = !(await validateField("payee"));
-    // const isPayeeValid = !errors.payee && !(await validateField("payee"));
-    const isPayeeValid = !errors.payee;
-
-    console.log("isAmountValid", isAmountValid);
-    console.log("isPayeeAccountValid", isPayeeAccountValid);
-    console.log("isPurposeValid", isPurposeValid);
-    console.log("isPayeeValid", isPayeeValid);
-
-    if (
-      !isAmountValid ||
-      !isPayeeAccountValid ||
-      !isPurposeValid ||
-      !isPayeeValid
-    ) {
-      return;
-    }
-
-    console.log("Submitting these values", values);
-  };
-
-  useEffect(() => {
-    if (values.amount) {
-      validateAmount(values.amount);
-    }
-  }, [values.payerAccount]);
+  const currentBalance = payerAccounts?.find(
+    (x) => x.id === values.payerAccount
+  )?.balance;
 
   return (
     <Box
@@ -238,7 +171,16 @@ const App = () => {
                     data-testid={`payer-account-option-${account.id}`}
                   >
                     <span>{`${account.iban}`}</span>
-                    <span>{`${account.balance} EUR`}</span>
+                    <span>
+                      <Typography
+                        color={account.balance < 0 ? "error" : "inherit"}
+                        component={"span"}
+                        variant="inherit"
+                      >
+                        {account.balance}
+                      </Typography>{" "}
+                      EUR
+                    </span>
                   </MenuItem>
                 ))}
               </Select>
@@ -287,10 +229,17 @@ const App = () => {
                   <span>{errors?.amount}</span>
                   <span style={{ color: "grey" }}>
                     Your balance is{" "}
-                    {
-                      payerAccounts?.find((x) => x.id === values.payerAccount)
-                        ?.balance
-                    }
+                    <Typography
+                      color={
+                        currentBalance != null && currentBalance < 0
+                          ? "error"
+                          : "inherit"
+                      }
+                      component={"span"}
+                      variant="inherit"
+                    >
+                      {currentBalance}
+                    </Typography>
                   </span>
                 </span>
               }
