@@ -72,7 +72,7 @@ const App = () => {
       .string()
       .required("Purpose is required")
       .min(3, "Purpose must have at least 3 characters")
-      .max(137, "Purpose must be less than 137 characters"),
+      .max(135, "Purpose must be less than 135 characters"),
     payerAccount: yup.string().required("Payer Account is required"),
     payee: yup.string().required("Payee is required").max(70),
   });
@@ -98,6 +98,7 @@ const App = () => {
     values,
     errors,
     isSubmitting,
+    validateField,
   } = formik;
 
   const getCurrentBalance = () => {
@@ -105,8 +106,8 @@ const App = () => {
   };
 
   const validateAmount = (value) => {
-    if (!value || value <= 0) {
-      setFieldError("amount", "Amount must be a positive number");
+    if (!value || value < 0.01) {
+      setFieldError("amount", "Amount can not be less than 0.01");
       return false;
     }
 
@@ -168,7 +169,15 @@ const App = () => {
     e.preventDefault();
     const isAmountValid = validateAmount(values.amount);
     const isPayeeAccountValid = await validatePayeeAccount(values.payeeAccount);
+
+    await validateField("purpose");
+    await validateField("payee");
+
+    // const isPurposeValid = !(await validateField("purpose"));
+    // const isPurposeValid = !errors.purpose && !(await validateField("purpose"));
     const isPurposeValid = !errors.purpose;
+    // const isPayeeValid = !(await validateField("payee"));
+    // const isPayeeValid = !errors.payee && !(await validateField("payee"));
     const isPayeeValid = !errors.payee;
 
     console.log("isAmountValid", isAmountValid);
