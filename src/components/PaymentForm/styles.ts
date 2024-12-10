@@ -1,5 +1,11 @@
 import { SxProps, Theme } from "@mui/material";
 
+// Language select wrapper styles
+export const languageSelectWrapperStyles: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "end",
+};
+
 // Language select styles
 export const languageSelectStyles: SxProps<Theme> = {
   marginBottom: "1rem",

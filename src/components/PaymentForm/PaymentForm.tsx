@@ -19,6 +19,7 @@ import {
   helperTextStyles,
   submitButtonWrapperStyles,
   languageSelectStyles,
+  languageSelectWrapperStyles,
 } from "./styles";
 import { fetchIsPayeeAccountValid } from "../../api";
 import { PAYER_ACCOUNTS } from "../../../constants";
@@ -112,7 +113,6 @@ export const PaymentForm = () => {
         (x) => x.id === values.payerAccount
       )?.iban;
 
-      console.log("SUBMITING THESE", values);
       console.log("---------Submitting these values------");
       console.log("Payer account", payerAccount);
       console.log("Payee", values.payee);
@@ -151,14 +151,16 @@ export const PaymentForm = () => {
 
   return (
     <form onSubmit={handleSubmit} data-testid="form">
-      <Select
-        value={language}
-        onChange={handleLanguageChange}
-        sx={languageSelectStyles}
-      >
-        <MenuItem value="EN">EN</MenuItem>
-        <MenuItem value="LT">LT</MenuItem>
-      </Select>
+      <Box sx={languageSelectWrapperStyles}>
+        <Select
+          value={language}
+          onChange={handleLanguageChange}
+          sx={languageSelectStyles}
+        >
+          <MenuItem value="EN">EN</MenuItem>
+          <MenuItem value="LT">LT</MenuItem>
+        </Select>
+      </Box>
 
       <FormControl fullWidth>
         <InputLabel id="payer-account-label">Account</InputLabel>
