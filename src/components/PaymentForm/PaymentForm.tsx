@@ -24,25 +24,28 @@ import {
 import { fetchIsPayeeAccountValid } from "../../api";
 import { PAYER_ACCOUNTS } from "../../../constants";
 import { useState } from "react";
-import { formatNumberByLocale, Language } from "../../utils";
+import { allLanguages, formatNumberByLocale, Language } from "../../utils";
+
+export const PAYEE_ACCOUNT_REQUIRED_MESSAGE = "Payee account is required.";
+export const PAYEE_ACCOUNT_INVALID_MESSAGE = "Payee account is invalid.";
 
 export const PaymentForm = () => {
   const validatePayeeAccount = async (value: string) => {
     if (!value) {
-      setFieldError("payeeAccount", "Payee account is required");
+      setFieldError("payeeAccount", PAYEE_ACCOUNT_REQUIRED_MESSAGE);
       return false;
     }
     try {
       const isValid = await fetchIsPayeeAccountValid(value);
       if (!isValid) {
-        setFieldError("payeeAccount", "Payee account is invalid");
+        setFieldError("payeeAccount", PAYEE_ACCOUNT_INVALID_MESSAGE);
         return false;
       } else {
         setFieldError("payeeAccount", "");
         return true;
       }
     } catch (error) {
-      setFieldError("payeeAccount", "Error validating account");
+      setFieldError("payeeAccount", "Error validating account.");
       console.error("Validation error:", error);
       return false;
     }
@@ -54,49 +57,51 @@ export const PaymentForm = () => {
   );
 
   const validationSchema = yup.object().shape({
-    purpose: yup
+    payerAccount: yup.string().required("Payer Account is required."),
+    payee: yup
       .string()
-      .required("Purpose is required")
-      .min(3, "Purpose must have at least 3 characters")
-      .max(135, "Purpose must be less than 135 characters"),
-    payerAccount: yup.string().required("Payer Account is required"),
-    payee: yup.string().required("Payee is required").max(70),
+      .required("Payee name is required.")
+      .max(70, "Payee name cannot exceed 70 characters."),
+    payeeAccount: yup
+      .string()
+      .required(PAYEE_ACCOUNT_REQUIRED_MESSAGE)
+      .test(
+        "is-valid-payee-account",
+        PAYEE_ACCOUNT_INVALID_MESSAGE,
+        async (value) => {
+          const isValid = await debouncedValidatePayeeAccount(value);
+          return isValid ?? false;
+        }
+      ),
     amount: yup
       .number()
-      .required("Amount is required")
+      .required("Amount is required.")
       .min(0.01)
       .test(
         "check-amount-validity",
-        "Amount must be less than or equal to the account balance",
+        "Amount must be less than or equal to the account balance.",
         function (value) {
           const currentBalance = getCurrentBalance();
 
           if (!currentBalance) {
             return this.createError({
-              message: "Payer account must be selected first",
+              message: "Payer account must be selected first.",
             });
           }
-
           if (value > currentBalance) {
             return this.createError({
-              message: `Amount cannot exceed the current balance of ${currentBalance}`,
+              message: "Insufficient funds.",
             });
           }
 
           return true;
         }
       ),
-    payeeAccount: yup
+    purpose: yup
       .string()
-      .required("Payee account is required")
-      .test(
-        "is-valid-payee-account",
-        "Payee account is invalid",
-        async (value) => {
-          const isValid = await debouncedValidatePayeeAccount(value);
-          return isValid ?? false;
-        }
-      ),
+      .required("Purpose is required.")
+      .min(3, "Purpose must have at least 3 characters.")
+      .max(135, "Purpose must be less than 135 characters."),
   });
 
   const formik = useFormik({
@@ -153,12 +158,16 @@ export const PaymentForm = () => {
     <form onSubmit={handleSubmit} data-testid="form">
       <Box sx={languageSelectWrapperStyles}>
         <Select
+          data-testid="language-select-input"
           value={language}
           onChange={handleLanguageChange}
           sx={languageSelectStyles}
         >
-          <MenuItem value="EN">EN</MenuItem>
-          <MenuItem value="LT">LT</MenuItem>
+          {allLanguages.map((lang) => (
+            <MenuItem data-testid={lang} key={lang} value={lang}>
+              {lang}
+            </MenuItem>
+          ))}
         </Select>
       </Box>
 

@@ -1,4 +1,5 @@
 export type Language = "EN" | "LT";
+export const allLanguages: Language[] = ["EN", "LT"];
 
 export const formatNumberByLocale = (
   value: string | number | undefined,
