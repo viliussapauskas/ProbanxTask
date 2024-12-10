@@ -9,18 +9,21 @@ import {
   MenuItem,
   InputAdornment,
   Typography,
+  SelectChangeEvent,
 } from "@mui/material";
 import * as yup from "yup";
 import { useDebouncedCallback } from "use-debounce";
 import {
-  selectDisplayPropsStyles,
+  accountSelectDisplayPropsStyles,
   menuItemStyles,
   helperTextStyles,
   submitButtonWrapperStyles,
+  languageSelectStyles,
 } from "./styles";
 import { fetchIsPayeeAccountValid } from "../../api";
 import { PAYER_ACCOUNTS } from "../../../constants";
 import { useState } from "react";
+import { formatNumberByLocale, Language } from "../../utils";
 
 export const PaymentForm = () => {
   const validatePayeeAccount = async (value: string) => {
@@ -140,12 +143,27 @@ export const PaymentForm = () => {
     (x) => x.id === values.payerAccount
   )?.balance;
 
+  const [language, setLanguage] = useState<Language>("EN");
+
+  const handleLanguageChange = (event: SelectChangeEvent<string>) => {
+    setLanguage(event.target.value as Language);
+  };
+
   return (
     <form onSubmit={handleSubmit} data-testid="form">
+      <Select
+        value={language}
+        onChange={handleLanguageChange}
+        sx={languageSelectStyles}
+      >
+        <MenuItem value="EN">EN</MenuItem>
+        <MenuItem value="LT">LT</MenuItem>
+      </Select>
+
       <FormControl fullWidth>
         <InputLabel id="payer-account-label">Account</InputLabel>
         <Select
-          SelectDisplayProps={{ style: selectDisplayPropsStyles }}
+          SelectDisplayProps={{ style: accountSelectDisplayPropsStyles }}
           value={values.payerAccount}
           label="Account"
           id="payerAccount"
@@ -169,7 +187,7 @@ export const PaymentForm = () => {
                   component={"span"}
                   variant="inherit"
                 >
-                  {account.balance}
+                  {formatNumberByLocale(account.balance, language)}
                 </Typography>{" "}
                 EUR
               </span>
@@ -218,7 +236,7 @@ export const PaymentForm = () => {
           <span style={helperTextStyles}>
             <span>{errors?.amount}</span>
             <Typography
-              component={"span"}
+              component="span"
               variant="inherit"
               color="textSecondary"
             >
@@ -232,7 +250,7 @@ export const PaymentForm = () => {
                 component="span"
                 variant="inherit"
               >
-                {currentBalance}
+                {formatNumberByLocale(currentBalance, language)}
               </Typography>
             </Typography>
           </span>

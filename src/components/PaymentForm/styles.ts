@@ -1,7 +1,12 @@
 import { SxProps, Theme } from "@mui/material";
 
-// Select display styles
-export const selectDisplayPropsStyles: React.CSSProperties = {
+// Language select styles
+export const languageSelectStyles: SxProps<Theme> = {
+  marginBottom: "1rem",
+};
+
+// Account select display styles
+export const accountSelectDisplayPropsStyles: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
 };
