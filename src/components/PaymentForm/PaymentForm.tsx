@@ -119,7 +119,7 @@ export const PaymentForm = () => {
       )?.iban;
 
       console.log("---------Submitting these values------");
-      console.log("Payer account", payerAccount);
+      console.log("Payer account", payerAccount); // Would make sense to send the ID (values.payerAccount) to the endpoint
       console.log("Payee", values.payee);
       console.log("Payee account", values.payeeAccount);
       console.log("Amount", values.amount);
