@@ -1,6 +1,6 @@
 # How to run:
 
-1. Used node 22
+1. Used node 20
 2. npm i
 3. npm run dev
 
