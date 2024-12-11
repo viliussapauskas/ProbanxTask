@@ -53,7 +53,7 @@ export const PaymentForm = () => {
 
   const debouncedValidatePayeeAccount = useDebouncedCallback(
     validatePayeeAccount,
-    300
+    500
   );
 
   const validationSchema = yup.object().shape({
@@ -76,7 +76,7 @@ export const PaymentForm = () => {
     amount: yup
       .number()
       .required("Amount is required.")
-      .min(0.01)
+      .min(0.01, "Amount must be at least 0.01")
       .test(
         "check-amount-validity",
         "Amount must be less than or equal to the account balance.",
